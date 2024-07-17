@@ -22,12 +22,9 @@ static esp_err_t on_sensor_toggle(httpd_req_t *req)
     return ESP_OK;
 }
 
-static esp_err_t on_readings(httpd_req_t *req)
-{
-
-    FILE *file = fopen("/data/readings.txt", "r");
-    if (!file)
-    {
+void createAccumulatedGraph(const char *filename, void *req) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
         perror("Unable to open file");
         exit(EXIT_FAILURE);
     }
@@ -36,20 +33,20 @@ static esp_err_t on_readings(httpd_req_t *req)
     size_t bytes_read;
 
     // Prepare SVG header
-    const char *svgHeader = "<svg width='800' height='600' xmlns='http://www.w3.org/2000/svg'>\n<rect width='100\\%' height='100\\%' fill='white' />\n";
+    const char *svgHeader = "<svg width='800' height='600' xmlns='http://www.w3.org/2000/svg'>\n<rect width='100%%' height='100%%' fill='white' />\n";
     httpd_resp_send_chunk(req, svgHeader, strlen(svgHeader));
 
     int y;
     int xPos = 50; // Initial X position
-    const int yOffset = 300; // Center Y position
+    const int yOffset = 550; // Center Y position
     const int xStep = 1; // Step size for X-axis
     int prevX = 50, prevY = yOffset; // Initial previous point
 
-    while (fscanf(file, "%d,", &y)>0) {
-        int yPos = yOffset - y;
+    while (fscanf(file, "%d,", &y) == 1) {
+        float yPos = yOffset - (y/10.0);
 
         // Draw the line in SVG
-        int len = snprintf(buf, sizeof(buf), "<line x1='%d' y1='%d' x2='%d' y2='%d' stroke='blue' stroke-width='2'/>\n", prevX, prevY, xPos, yPos);
+        int len = snprintf(buf, sizeof(buf), "<line x1='%d' y1='%d' x2='%d' y2='%f' stroke='blue' stroke-width='2'/>\n", prevX, prevY, xPos, yPos);
         httpd_resp_send_chunk(req, buf, len);
 
         // Update previous points
@@ -62,10 +59,61 @@ static esp_err_t on_readings(httpd_req_t *req)
     const char *svgFooter = "</svg>\n";
     httpd_resp_send_chunk(req, svgFooter, strlen(svgFooter));
 
-    // Send final chunk to indicate the end of the response
-    httpd_resp_send_chunk(req, NULL, 0);
+    fclose(file);
+}
+
+void createDerivativeGraph(const char *filename, void *req) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Unable to open file");
+        exit(EXIT_FAILURE);
+    }
+
+    char buf[1024];
+    size_t bytes_read;
+
+    // Prepare SVG header
+    const char *svgHeader = "<svg width='800' height='600' xmlns='http://www.w3.org/2000/svg'>\n<rect width='100%%' height='100%%' fill='white' />\n";
+    httpd_resp_send_chunk(req, svgHeader, strlen(svgHeader));
+
+    int y, prevY = 0;
+    int xPos = 50; // Initial X position
+    const int yOffset = 550; // Center Y position
+    const int xStep = 1; // Step size for X-axis
+    int firstPoint = 1; // Flag to handle the first point separately
+
+    while (fscanf(file, "%d,", &y) == 1) {
+        if (!firstPoint) {
+            float derivative = (y/10.0) - prevY;
+            float yPos = yOffset - derivative;
+
+            // Draw the line in SVG
+            int len = snprintf(buf, sizeof(buf), "<line x1='%d' y1='%d' x2='%d' y2='%f' stroke='red' stroke-width='2'/>\n", xPos - xStep, yOffset - prevY, xPos, yPos);
+            httpd_resp_send_chunk(req, buf, len);
+
+            prevY = derivative; // Update the previous Y to the current derivative
+        } else {
+            firstPoint = 0; // Skip the first point
+            prevY = y;
+        }
+
+        xPos += xStep;
+    }
+
+    // Prepare SVG footer
+    const char *svgFooter = "</svg>\n";
+    httpd_resp_send_chunk(req, svgFooter, strlen(svgFooter));
+
 
     fclose(file);
+}
+
+static esp_err_t on_readings(httpd_req_t *req)
+{
+
+    createAccumulatedGraph("/data/readings.txt", req); 
+    //createDerivativeGraph("/data/readings.txt", req); 
+    httpd_resp_send_chunk(req, NULL, 0);
 
     return ESP_OK;
 }

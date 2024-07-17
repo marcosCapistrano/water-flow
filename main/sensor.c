@@ -37,6 +37,11 @@ void sensor_init()
     ESP_ERROR_CHECK(pcnt_new_unit(&unit_config, &sensor.unit));
     ESP_ERROR_CHECK(pcnt_new_channel(sensor.unit, &chan_config, &pcnt_chan));
 
+    pcnt_glitch_filter_config_t filter_config = {
+        .max_glitch_ns = 1000,
+    };
+    ESP_ERROR_CHECK(pcnt_unit_set_glitch_filter(sensor.unit, &filter_config));
+
     ESP_ERROR_CHECK(pcnt_channel_set_edge_action(pcnt_chan, PCNT_CHANNEL_EDGE_ACTION_HOLD, PCNT_CHANNEL_EDGE_ACTION_INCREASE));
 
     int watch_points[] = {PCNT_LOW_LIMIT, PCNT_HIGH_LIMIT};
@@ -59,10 +64,12 @@ void vTaskSensor()
     int sum = 0;
     for (;;)
     {
-        ESP_LOGI(TAG, "Task running");
         int pulse_count = 0;
         ESP_ERROR_CHECK(pcnt_unit_get_count(sensor.unit, &pulse_count));
+
+        printf("pulse: %d", pulse_count);
         sum += pulse_count;
+        pcnt_unit_clear_count(sensor.unit);
 
         storage_write(sum);
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -87,7 +94,7 @@ void sensor_start()
             (void *)NULL,     /* Parameter passed into the task. */
             tskIDLE_PRIORITY, /* Priority at which the task is created. */
             &xHandle);        /* Used to pass out the created task's handle. */
-            started = true;
+        started = true;
     }
     else
     {
