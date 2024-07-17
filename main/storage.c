@@ -1,4 +1,6 @@
 #include <string.h>
+#include <stdio.h>
+#include <dirent.h>
 #include "esp_spiffs.h"
 #include "esp_log.h"
 
@@ -32,46 +34,43 @@ void storage_init()
         }
         return;
     }
+
+    FILE *data_file = fopen("/data/readings.txt", "w");
+    fprintf(data_file, "0,");
 }
 
-char *current_file = NULL;
-
-void storage_write(double quantity)
+char *current_file = "/data/readings.txt";
+void storage_write(int quantity)
 {
-    if (current_file != NULL)
+        ESP_LOGI(TAG, "write");
+    FILE *data_file = fopen(current_file, "a");
+    if (data_file == NULL)
     {
-        FILE *data_file = fopen(current_file, "a");
-        if (data_file == NULL)
-        {
-            ESP_LOGE(TAG, "Failed to open file for writing");
-            return;
-        }
-
-        fprintf(data_file, "%f,", quantity);
-        fclose(data_file);
-    } else {
-        // create_new_file("");
+        ESP_LOGE(TAG, "Failed to open file for writing");
+        return;
     }
+
+    fprintf(data_file, "%d,", quantity);
+    fclose(data_file);
 }
 
 void storage_read()
 {
+        ESP_LOGI(TAG, "read");
     // Open renamed file for reading
-    FILE *data_file = fopen("/data/data.txt", "r");
+    FILE *data_file = fopen("/data/readings.txt", "r");
     if (data_file == NULL)
     {
         ESP_LOGE(TAG, "Failed to open file for reading");
         return;
     }
     ESP_LOGI(TAG, "Reading file");
-    char line[640];
-    fgets(line, sizeof(line), data_file);
-    fclose(data_file);
-    // strip newline
-    char *pos = strchr(line, '\n');
-    if (pos)
+
+    char buf[1024];
+    int bytes_read = 0;
+    while ((bytes_read = fread(buf, sizeof(char), sizeof(buf), data_file)) > 0)
     {
-        *pos = '\0';
+        printf("%.*s", bytes_read, buf);
     }
-    ESP_LOGI(TAG, "Read from file: '%s'", line);
+    fclose(data_file);
 }

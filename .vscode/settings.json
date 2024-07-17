@@ -16,6 +16,8 @@
     "idf.gitPath": "git",
     "files.associations": {
         "esp_log.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "freertos.h": "c",
+        "pulse_cnt.h": "c"
     }
 }
